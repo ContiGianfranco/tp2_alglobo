@@ -1,3 +1,5 @@
+mod payment;
+
 use structopt::StructOpt;
 use std::any::Any;
 use std::collections::{HashMap, HashSet};
@@ -6,11 +8,13 @@ use std::mem::size_of;
 use std::net::{SocketAddr, TcpListener, TcpStream, UdpSocket};
 use std::sync::{Arc, Condvar, Mutex};
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::thread;
+use std::{fs, thread};
 use std::time::Duration;
+use std::str;
 
 use rand::{Rng, thread_rng};
 use std::convert::TryInto;
+use crate::payment::Payment;
 
 fn id_to_ctrladdr(id: usize) -> String { "127.0.0.1:1234".to_owned() + &*id.to_string() }
 fn id_to_dataaddr(id: usize) -> String { "127.0.0.1:1235".to_owned() + &*id.to_string() }
@@ -162,26 +166,47 @@ fn main() {
 
     loop {
         println!("[{}] Start", id);
+        let csv = fs::read_to_string("/home/lorenzo/Desktop/repos/tp2_alglobo/resources/payments.csv").expect("Something went wrong reading the file");
+        let reader = csv::Reader::from_reader(csv.as_bytes());
+        let mut iter = reader.into_deserialize();
         let mut scrum_master = LeaderElection::new(id);
         let mut socket = UdpSocket::bind(id_to_dataaddr(id)).unwrap();
-        let mut buf = [0; 4];
+        let mut buf = [0; 8];
 
         loop {
 
+            let mut last_record: usize = 0;
+
             if scrum_master.am_i_leader() {
-                println!("[{}] I'm leader", id);
+
+                //println!("[{}] I'm leader and last line is {}", id, last_record.to_string());
+
+                if let Some(result) = iter.next() {
+                    if result.is_err() {
+                        println!("[Reading record threw error]");
+                    } else {
+                        let record: Payment = result.unwrap();
+                        println!("[Record number {}]", record.line);
+                        last_record = record.line
+                    }
+                } else {
+                    println!("[Reached EOF]");
+                }
+
                 socket.set_read_timeout(Some(Duration::new(1, 0)));
                 if let Ok((size, from)) = socket.recv_from(&mut buf) {
-                    println!("[{}] Recived PING, sending PONG", id);
-                    socket.send_to("PONG".as_bytes(), from).unwrap();
+                    println!("[{}] Received PING, sending NUMBER OF LAST PROCESSED LINE", id);
+                    socket.send_to(&last_record.to_be_bytes(), from).unwrap();
                 }
             } else {
                 let leader_id = scrum_master.get_leader_id();
-                println!("[{}] Send PING to {}", id, leader_id);
+                println!("[{}] Asking leader ({}) last line via PING", id, leader_id);
+                //println!("[{}] Last time I checked last line was {}", id, last_record.to_string());
                 socket.send_to("PING".as_bytes(), id_to_dataaddr(leader_id)).unwrap();
                 socket.set_read_timeout(Some(TIMEOUT)).unwrap();
                 if let Ok((size, from)) = socket.recv_from(&mut buf) {
-                    println!("[{}] Received PONG", id);
+                    last_record = usize::from_be_bytes(buf);
+                    println!("[{}] Received from leader ({}) that last line is {}", id, leader_id,last_record.to_string());
                     thread::sleep(Duration::from_millis(1000));
                 } else {
                     scrum_master.find_new()
