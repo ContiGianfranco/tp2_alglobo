@@ -1,18 +1,18 @@
 mod payment;
 
 use structopt::StructOpt;
-use std::any::Any;
-use std::collections::{HashMap, HashSet};
-use std::io::{BufRead, BufReader, Write};
+
+
+
 use std::mem::size_of;
-use std::net::{SocketAddr, TcpListener, TcpStream, UdpSocket};
+use std::net::{UdpSocket};
 use std::sync::{Arc, Condvar, Mutex};
-use std::sync::atomic::{AtomicUsize, Ordering};
+
 use std::{fs, thread};
 use std::time::Duration;
-use std::str;
 
-use rand::{Rng, thread_rng};
+
+
 use std::convert::TryInto;
 use crate::payment::Payment;
 
@@ -102,7 +102,7 @@ impl LeaderElection {
     fn responder(&mut self) {
         while !*self.stop.0.lock().unwrap() {
             let mut buf = [0; size_of::<usize>() + 1];
-            let (size, from) = self.socket.recv_from(&mut buf).unwrap();
+            let (_size, _from) = self.socket.recv_from(&mut buf).unwrap();
             let id_from = usize::from_le_bytes(buf[1..].try_into().unwrap());
             if *self.stop.0.lock().unwrap() {
                 break;
@@ -170,7 +170,7 @@ fn main() {
         let reader = csv::Reader::from_reader(csv.as_bytes());
         let mut iter = reader.into_deserialize();
         let mut scrum_master = LeaderElection::new(id);
-        let mut socket = UdpSocket::bind(id_to_dataaddr(id)).unwrap();
+        let socket = UdpSocket::bind(id_to_dataaddr(id)).unwrap();
         let mut buf = [0; 8];
 
         loop {
@@ -194,7 +194,7 @@ fn main() {
                 }
 
                 socket.set_read_timeout(Some(Duration::new(1, 0)));
-                if let Ok((size, from)) = socket.recv_from(&mut buf) {
+                if let Ok((_size, from)) = socket.recv_from(&mut buf) {
                     println!("[{}] Received PING, sending NUMBER OF LAST PROCESSED LINE", id);
                     socket.send_to(&last_record.to_be_bytes(), from).unwrap();
                 }
@@ -204,7 +204,7 @@ fn main() {
                 //println!("[{}] Last time I checked last line was {}", id, last_record.to_string());
                 socket.send_to("PING".as_bytes(), id_to_dataaddr(leader_id)).unwrap();
                 socket.set_read_timeout(Some(TIMEOUT)).unwrap();
-                if let Ok((size, from)) = socket.recv_from(&mut buf) {
+                if let Ok((_size, _from)) = socket.recv_from(&mut buf) {
                     last_record = usize::from_be_bytes(buf);
                     println!("[{}] Received from leader ({}) that last line is {}", id, leader_id,last_record.to_string());
                     thread::sleep(Duration::from_millis(1000));
