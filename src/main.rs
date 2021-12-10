@@ -166,7 +166,7 @@ fn main() {
 
     loop {
         println!("[{}] Start", id);
-        let csv = fs::read_to_string("/home/lorenzo/Desktop/repos/tp2_alglobo/resources/payments.csv").expect("Something went wrong reading the file");
+        let csv = fs::read_to_string("./resources/payments.csv").expect("Something went wrong reading the file");
         let reader = csv::Reader::from_reader(csv.as_bytes());
         let mut iter = reader.into_deserialize();
         let mut scrum_master = LeaderElection::new(id);
