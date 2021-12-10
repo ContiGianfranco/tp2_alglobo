@@ -164,6 +164,8 @@ fn main() {
 
     let id = args.id;
 
+    let mut last_record: usize = 0;
+
     loop {
         println!("[{}] Start", id);
         let csv = fs::read_to_string("./resources/payments.csv").expect("Something went wrong reading the file");
@@ -172,8 +174,6 @@ fn main() {
         let mut scrum_master = LeaderElection::new(id);
         let socket = UdpSocket::bind(id_to_dataaddr(id)).unwrap();
         let mut buf = [0; 8];
-
-        let mut last_record: usize = 0;
 
         loop {
 
@@ -185,7 +185,17 @@ fn main() {
                     if result.is_err() {
                         println!("[Reading record threw error]");
                     } else {
-                        let record: Payment = result.unwrap();
+                        let mut record: Payment = result.unwrap();
+                        while record.line <= last_record {
+                            if let Some(result) = iter.next() {
+                                if result.is_err() {
+                                    println!("[Reading record threw error]");
+                                } else {
+                                    record = result.unwrap();
+                                }
+                            }
+                        }
+
                         println!("[Record number {}]", record.line);
                         last_record = record.line;
                     }
