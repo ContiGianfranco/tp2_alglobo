@@ -173,13 +173,13 @@ fn main() {
         let socket = UdpSocket::bind(id_to_dataaddr(id)).unwrap();
         let mut buf = [0; 8];
 
-        loop {
+        let mut last_record: usize = 0;
 
-            let mut last_record: usize = 0;
+        loop {
 
             if scrum_master.am_i_leader() {
 
-                //println!("[{}] I'm leader and last line is {}", id, last_record.to_string());
+                println!("[{}] I'm leader and last line is {}", id, last_record.to_string());
 
                 if let Some(result) = iter.next() {
                     if result.is_err() {
@@ -187,7 +187,7 @@ fn main() {
                     } else {
                         let record: Payment = result.unwrap();
                         println!("[Record number {}]", record.line);
-                        last_record = record.line
+                        last_record = record.line;
                     }
                 } else {
                     println!("[Reached EOF]");
@@ -201,7 +201,7 @@ fn main() {
             } else {
                 let leader_id = scrum_master.get_leader_id();
                 println!("[{}] Asking leader ({}) last line via PING", id, leader_id);
-                //println!("[{}] Last time I checked last line was {}", id, last_record.to_string());
+                println!("[{}] Last time I checked last line was {}", id, last_record.to_string());
                 socket.send_to("PING".as_bytes(), id_to_dataaddr(leader_id)).unwrap();
                 socket.set_read_timeout(Some(TIMEOUT)).unwrap();
                 if let Ok((_size, _from)) = socket.recv_from(&mut buf) {
