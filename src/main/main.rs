@@ -1,4 +1,5 @@
 mod payment;
+mod transaction_coordinator;
 
 use structopt::StructOpt;
 
@@ -8,6 +9,8 @@ use std::sync::{Arc, Condvar, Mutex};
 use std::{fs, thread};
 use std::time::Duration;
 use std::convert::TryInto;
+use std::fs::File;
+use std::io::Write;
 
 use crate::payment::Payment;
 
@@ -156,67 +159,86 @@ struct Cli {
 /// AlGlobo instance main loop
 fn main() {
     let args = Cli::from_args();
-
     let id = args.id;
+    println!("[{}] Start", id);
 
+    let socket = UdpSocket::bind(id_to_dataaddr(id)).unwrap();
+    let csv = fs::read_to_string("./resources/payments.csv").expect("Something went wrong reading the file");
+    let reader = csv::Reader::from_reader(csv.as_bytes());
+    let mut iter = reader.into_deserialize();
+    let mut scrum_master = LeaderElection::new(id);
+    let mut buf = [0; 8];
     let mut last_record: usize = 0;
+    let mut failed_transactions_file = get_failed_transactions_file("src/main_activity/failed_transactions.csv");
+    let mut coordinator = transaction_coordinator::TransactionCoordinator::new(id);
 
     loop {
-        println!("[{}] Start", id);
-        let csv = fs::read_to_string("./resources/payments.csv").expect("Something went wrong reading the file");
-        let reader = csv::Reader::from_reader(csv.as_bytes());
-        let mut iter = reader.into_deserialize();
-        let mut scrum_master = LeaderElection::new(id);
-        let socket = UdpSocket::bind(id_to_dataaddr(id)).unwrap();
-        let mut buf = [0; 8];
 
-        loop {
-
-            if scrum_master.am_i_leader() {
-
-                println!("[{}] I'm leader and last line is {}", id, last_record.to_string());
-
-                if let Some(result) = iter.next() {
-                    if result.is_err() {
-                        println!("[Reading record threw error]");
-                    } else {
-                        let mut record: Payment = result.unwrap();
-                        while record.line <= last_record {
-                            if let Some(result) = iter.next() {
-                                if result.is_err() {
-                                    println!("[Reading record threw error]");
-                                } else {
-                                    record = result.unwrap();
-                                }
+        if scrum_master.am_i_leader() {
+            if let Some(result) = iter.next() {
+                if result.is_err() {
+                    println!("[Reading record threw error]");
+                } else {
+                    let mut record: Payment = result.unwrap();
+                    while record.line <= last_record {
+                        if let Some(result) = iter.next() {
+                            if result.is_err() {
+                                println!("[Reading record threw error]");
+                            } else {
+                                record = result.unwrap();
                             }
                         }
-
-                        println!("[Record number {}]", record.line);
-                        last_record = record.line;
                     }
-                } else {
-                    println!("[Reached EOF]");
-                }
 
-                socket.set_read_timeout(Some(Duration::new(1, 0)));
-                if let Ok((_size, from)) = socket.recv_from(&mut buf) {
-                    println!("[{}] Received PING, sending NUMBER OF LAST PROCESSED LINE", id);
-                    socket.send_to(&last_record.to_be_bytes(), from).unwrap();
+                    println!("\n\n\n[Record | {},{},{},{}]", record.line,record.hotel, record.airline, record.bank);
+
+                    let is_successful = coordinator.submit(record.line as i32, record);
+
+                    if !is_successful {
+                        let data = format!("{},{},{}\n",record.hotel, record.airline, record.bank);
+                        failed_transactions_file.write_all(data.as_ref()).expect("Error writing to error file")
+                    }
+
+                    last_record = record.line;
                 }
             } else {
-                let leader_id = scrum_master.get_leader_id();
-                println!("[{}] Asking leader ({}) last line via PING", id, leader_id);
-                println!("[{}] Last time I checked last line was {}", id, last_record.to_string());
-                socket.send_to("PING".as_bytes(), id_to_dataaddr(leader_id)).unwrap();
-                socket.set_read_timeout(Some(TIMEOUT)).unwrap();
-                if let Ok((_size, _from)) = socket.recv_from(&mut buf) {
-                    last_record = usize::from_be_bytes(buf);
-                    println!("[{}] Received from leader ({}) that last line is {}", id, leader_id,last_record.to_string());
-                    thread::sleep(Duration::from_millis(1000));
-                } else {
-                    scrum_master.find_new()
-                }
+                println!("[Reached EOF]");
+            }
+
+            socket.set_read_timeout(Some(Duration::new(1, 0)));
+            if let Ok((_size, from)) = socket.recv_from(&mut buf) {
+                println!("[{}] Received PING, sending NUMBER OF LAST PROCESSED LINE", id);
+                socket.send_to(&last_record.to_be_bytes(), from).unwrap();
+            }
+        } else {
+            let leader_id = scrum_master.get_leader_id();
+            println!("[{}] Asking leader ({}) last line via PING", id, leader_id);
+            println!("[{}] Last time I checked last line was {}", id, last_record.to_string());
+            socket.send_to("PING".as_bytes(), id_to_dataaddr(leader_id)).unwrap();
+            socket.set_read_timeout(Some(TIMEOUT)).unwrap();
+            if let Ok((_size, _from)) = socket.recv_from(&mut buf) {
+                last_record = usize::from_be_bytes(buf);
+                println!("[{}] Received from leader ({}) that last line is {}", id, leader_id, last_record.to_string());
+                thread::sleep(Duration::from_millis(500));
+            } else {
+                scrum_master.find_new()
             }
         }
     }
+}
+
+fn get_failed_transactions_file(failed_transactions_path: &str) -> File {
+    return match fs::OpenOptions::new()
+        .write(true)
+        .append(true)
+        .open(failed_transactions_path) {
+        Ok(file) => {
+            println!("Failed transactions already existed, will append on it");
+            file
+        }
+        Err(_) => {
+            println!("Failed transactions file does not exist, will create it");
+            fs::File::create(failed_transactions_path).expect("Error creating logger file")
+        }
+    };
 }
