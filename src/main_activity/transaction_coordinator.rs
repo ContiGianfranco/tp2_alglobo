@@ -5,7 +5,7 @@ use std::thread;
 use std::time::Duration;
 use crate::record::Record;
 
-const TRANSACTION_COORDINATOR_ADDR: &str = "127.0.0.1:1234";
+const TRANSACTION_COORDINATOR_ADDR: &str = "127.0.0.1:123";
 const STAKEHOLDERS: usize = 3;
 const TIMEOUT: Duration = Duration::from_secs(10);
 
@@ -89,16 +89,18 @@ impl Transaction {
 }
 
 pub struct TransactionCoordinator {
+    id: usize,
     log: HashMap<i32, TransactionState>,
     socket: UdpSocket,
     responses: Arc<(Mutex<Vec<Option<TransactionState>>>, Condvar)>,
 }
 
 impl TransactionCoordinator {
-    pub fn new() -> TransactionCoordinator {
+    pub fn new(id: usize) -> TransactionCoordinator {
         let coordinator = TransactionCoordinator {
+            id,
             log: HashMap::new(),
-            socket: UdpSocket::bind(TRANSACTION_COORDINATOR_ADDR).unwrap(),
+            socket: UdpSocket::bind(format!("{}{}",TRANSACTION_COORDINATOR_ADDR, id)).unwrap(),
             responses: Arc::new((Mutex::new(vec![None; STAKEHOLDERS]), Condvar::new())),
         };
 
@@ -215,6 +217,7 @@ impl TransactionCoordinator {
 
     fn clone(&self) -> Self {
         TransactionCoordinator {
+            id: self.id,
             log: HashMap::new(),
             socket: self.socket.try_clone().unwrap(),
             responses: self.responses.clone(),

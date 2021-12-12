@@ -4,7 +4,7 @@ Run AlGlobo process:
 
 Run main_activity process:
 
-`cargo run --color=always --package tp2_alglobo --bin main_activity`
+`cargo run --color=always --package tp2_alglobo --bin main_activity <id>`
 
 Run microservice process:
 
