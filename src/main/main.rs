@@ -18,7 +18,7 @@ fn id_to_ctrladdr(id: usize) -> String { "127.0.0.1:1234".to_owned() + &*id.to_s
 fn id_to_dataaddr(id: usize) -> String { "127.0.0.1:1235".to_owned() + &*id.to_string() }
 
 const TEAM_MEMBERS: usize = 5;
-const TIMEOUT: Duration = Duration::from_secs(10);
+const TIMEOUT: Duration = Duration::from_secs(20);
 
 struct LeaderElection {
     id: usize,
@@ -206,15 +206,16 @@ fn main() {
             }
 
             socket.set_read_timeout(Some(Duration::new(1, 0)));
-            if let Ok((_size, from)) = socket.recv_from(&mut buf) {
-                println!("[{}] Received PING, sending NUMBER OF LAST PROCESSED LINE", id);
-                socket.send_to(&last_record.to_be_bytes(), from).unwrap();
+
+            for peer_id in 0..TEAM_MEMBERS {
+                if peer_id != id {
+                    println!("[{}] Sending to peer last record", id);
+                    socket.send_to(&last_record.to_be_bytes(), id_to_dataaddr(peer_id)).unwrap();
+                }
             }
         } else {
             let leader_id = scrum_master.get_leader_id();
-            println!("[{}] Asking leader ({}) last line via PING", id, leader_id);
             println!("[{}] Last time I checked last line was {}", id, last_record.to_string());
-            socket.send_to("PING".as_bytes(), id_to_dataaddr(leader_id)).unwrap();
             socket.set_read_timeout(Some(TIMEOUT)).unwrap();
             if let Ok((_size, _from)) = socket.recv_from(&mut buf) {
                 last_record = usize::from_be_bytes(buf);
