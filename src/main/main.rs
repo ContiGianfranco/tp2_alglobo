@@ -33,7 +33,7 @@ impl LeaderElection {
         let mut ret = LeaderElection {
             id,
             socket: UdpSocket::bind(id_to_ctrladdr(id)).unwrap(),
-            leader_id: Arc::new((Mutex::new(Some(id)), Condvar::new())),
+            leader_id: Arc::new((Mutex::new(Some(5)), Condvar::new())),
             got_ok: Arc::new((Mutex::new(false), Condvar::new())),
             stop: Arc::new((Mutex::new(false), Condvar::new()))
         };
@@ -41,7 +41,6 @@ impl LeaderElection {
         let mut clone = ret.clone();
         thread::spawn(move || clone.responder());
 
-        ret.find_new();
         ret
     }
 
@@ -173,6 +172,7 @@ fn main() {
     let mut coordinator = transaction_coordinator::TransactionCoordinator::new(id);
 
     loop {
+
 
         if scrum_master.am_i_leader() {
             if let Some(result) = iter.next() {
