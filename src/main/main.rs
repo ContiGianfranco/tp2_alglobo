@@ -2,18 +2,13 @@ mod payment;
 
 use structopt::StructOpt;
 
-
-
 use std::mem::size_of;
 use std::net::{UdpSocket};
 use std::sync::{Arc, Condvar, Mutex};
-
 use std::{fs, thread};
 use std::time::Duration;
-
-
-
 use std::convert::TryInto;
+
 use crate::payment::Payment;
 
 fn id_to_ctrladdr(id: usize) -> String { "127.0.0.1:1234".to_owned() + &*id.to_string() }
