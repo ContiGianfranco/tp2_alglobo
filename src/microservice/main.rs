@@ -41,7 +41,7 @@ impl Transaction {
         serialize[9..13].copy_from_slice(&bin_service);
 
 
-        return serialize;
+        serialize
     }
 
     pub fn deserialize(buf: [u8; 13]) -> Transaction {
@@ -62,7 +62,7 @@ impl Transaction {
         let mut service_b:[u8; 4] = [0;4];
         service_b.clone_from_slice(&buf[9..13]);
 
-        return Transaction {
+        Transaction {
             transaction_id: i32::from_le_bytes(transaction_id_b),
             amount: i32::from_le_bytes(amount_b),
             transaction_state: state,
