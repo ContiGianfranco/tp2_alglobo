@@ -167,7 +167,11 @@ impl LeaderElection {
             }
         }
         *self.stop.0.lock().expect("stop is poisoned") = false;
-        self.stop.1.notify_all();
+    }
+
+    /// stops leader election protocol
+    pub fn stop(&mut self) {
+        *self.stop.0.lock().expect("stop is poisoned") = true;
     }
 
     /// clones the LeaderElection

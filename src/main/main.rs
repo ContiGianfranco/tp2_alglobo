@@ -30,6 +30,7 @@ fn main() {
     let socket = UdpSocket::bind(id_to_dataaddr(id)).expect("Unable to bind socket in main");
     let csv = fs::read_to_string("./resources/payments.csv")
         .expect("Something went wrong reading the file");
+    let lines = csv.split("\n").count() - 1;
     let reader = csv::Reader::from_reader(csv.as_bytes());
     let mut iter = reader.into_deserialize();
     let mut scrum_master = LeaderElection::new(id);
@@ -38,6 +39,7 @@ fn main() {
     let mut failed_transactions_file =
         get_failed_transactions_file("src/main/failed_transactions.csv");
     let mut coordinator = transaction_coordinator::TransactionCoordinator::new(id);
+
 
     loop {
         if scrum_master.am_i_leader() {
@@ -75,6 +77,8 @@ fn main() {
                 last_record = record.line;
             } else {
                 println!("[Reached EOF]");
+                scrum_master.stop();
+                break
             }
 
             socket
@@ -128,6 +132,10 @@ fn main() {
                             leader_id,
                             last_record.to_string()
                         );
+                    }
+                    if last_record == lines {
+                        scrum_master.stop();
+                        break;
                     }
                     thread::sleep(Duration::from_millis(500));
                 } else {
