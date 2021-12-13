@@ -81,7 +81,7 @@ fn main() {
                     service: id as i32,
                 };
 
-                socket.send_to(&response.serialize(), from).unwrap();
+                socket.send_to(&response.serialize(), from).expect("Error sending prepare response");
             }
             TransactionState::Commit => {
                 println!(
@@ -97,7 +97,7 @@ fn main() {
                     service: id as i32,
                 };
 
-                socket.send_to(&response.serialize(), from).unwrap();
+                socket.send_to(&response.serialize(), from).expect("Error sending commit response");
             }
             TransactionState::Abort => {
                 println!(
@@ -113,7 +113,7 @@ fn main() {
                     service: id as i32,
                 };
 
-                socket.send_to(&response.serialize(), from).unwrap();
+                socket.send_to(&response.serialize(), from).expect("Error sending abort response");
             }
             _ => {
                 println!("[{}] ??? {}", name, transaction.transaction_id);

@@ -24,7 +24,7 @@ impl TransactionCoordinator {
         let coordinator = TransactionCoordinator {
             id,
             log: HashMap::new(),
-            socket: UdpSocket::bind(format!("{}{}", TRANSACTION_COORDINATOR_ADDR, id)).unwrap(),
+            socket: UdpSocket::bind(format!("{}{}", TRANSACTION_COORDINATOR_ADDR, id)).expect("Error binding socket for transaction coordinator"),
             responses: Arc::new((Mutex::new(vec![None; STAKEHOLDERS]), Condvar::new())),
         };
 
@@ -80,7 +80,7 @@ impl TransactionCoordinator {
         r: Payment,
         expected: TransactionState,
     ) -> bool {
-        *self.responses.0.lock().unwrap() = vec![None; STAKEHOLDERS];
+        *self.responses.0.lock().expect("Responses is poisoned") = vec![None; STAKEHOLDERS];
 
         for stakeholder in 0..STAKEHOLDERS {
             let amount = match stakeholder {
@@ -115,11 +115,11 @@ impl TransactionCoordinator {
 
             self.socket
                 .send_to(&msg.serialize(), id_to_microservice(stakeholder))
-                .unwrap();
+                .expect("Error sending msg to stakeholder");
         }
 
         let responses = self.responses.1.wait_timeout_while(
-            self.responses.0.lock().unwrap(),
+            self.responses.0.lock().expect("Responses is poisoned"),
             TIMEOUT,
             |responses| responses.iter().any(Option::is_none),
         );
@@ -136,7 +136,7 @@ impl TransactionCoordinator {
                     wait_result
                         .0
                         .iter()
-                        .all(|opt| opt.is_some() && (opt.unwrap() == expected))
+                        .all(|opt| opt.is_some() && (opt.expect("opt is poisoned") == expected))
                 }
             }
             Err(e) => {
@@ -149,7 +149,7 @@ impl TransactionCoordinator {
     fn responder(&mut self) {
         loop {
             let mut buf = [0; 13];
-            let (size, from) = self.socket.recv_from(&mut buf).unwrap();
+            let (size, from) = self.socket.recv_from(&mut buf).expect("Error receiving message in responder");
             println!("[COORDINATOR] received {} bytes from {}", size, from);
 
             let transaction = Transaction::deserialize(buf);
@@ -157,13 +157,13 @@ impl TransactionCoordinator {
             match transaction.transaction_state {
                 TransactionState::Commit => {
                     println!("[COORDINATOR] received COMMIT from {}", transaction.service);
-                    self.responses.0.lock().unwrap()[transaction.service as usize] =
+                    self.responses.0.lock().expect("Responses is poisoned")[transaction.service as usize] =
                         Some(TransactionState::Commit);
                     self.responses.1.notify_all();
                 }
                 TransactionState::Abort => {
                     println!("[COORDINATOR] received ABORT from {}", transaction.service);
-                    self.responses.0.lock().unwrap()[transaction.service as usize] =
+                    self.responses.0.lock().expect("Responses is poisoned")[transaction.service as usize] =
                         Some(TransactionState::Abort);
                     self.responses.1.notify_all();
                 }
@@ -178,7 +178,7 @@ impl TransactionCoordinator {
         TransactionCoordinator {
             id: self.id,
             log: HashMap::new(),
-            socket: self.socket.try_clone().unwrap(),
+            socket: self.socket.try_clone().expect("Error cloning socket"),
             responses: self.responses.clone(),
         }
     }

@@ -27,7 +27,7 @@ fn main() {
     let id = args.id;
     println!("[{}] Start", id);
 
-    let socket = UdpSocket::bind(id_to_dataaddr(id)).unwrap();
+    let socket = UdpSocket::bind(id_to_dataaddr(id)).expect("Unable to bind socket in main");
     let csv = fs::read_to_string("./resources/payments.csv")
         .expect("Something went wrong reading the file");
     let reader = csv::Reader::from_reader(csv.as_bytes());
@@ -42,7 +42,7 @@ fn main() {
     loop {
         if scrum_master.am_i_leader() {
             if let Some(result) = iter.next() {
-                let mut record: Payment = result.unwrap();
+                let mut record: Payment = result.expect("Unable to read record");
                 while record.line <= last_record {
                     if let Some(result) = iter.next() {
                         match result {
@@ -86,7 +86,7 @@ fn main() {
                     println!("[{}] Sending to peer last record", id);
                     socket
                         .send_to(&last_record.to_be_bytes(), id_to_dataaddr(peer_id))
-                        .unwrap();
+                        .expect("Error sending last_record to peers");
                 }
             }
         } else {
@@ -99,7 +99,7 @@ fn main() {
             let leader_id = scrum_master.get_leader_id();
 
             if leader_id != id {
-                socket.set_read_timeout(Some(TIMEOUT)).unwrap();
+                socket.set_read_timeout(Some(TIMEOUT)).expect("Error setting set_read_timeout in main");
                 if let Ok((_size, from)) = socket.recv_from(&mut buf) {
                     last_record = usize::from_be_bytes(buf);
                     if leader_id == TEAM_MEMBERS {
@@ -108,9 +108,9 @@ fn main() {
                             .to_string()
                             .chars()
                             .last()
-                            .unwrap()
+                            .expect("Error getting id of leader")
                             .to_digit(10)
-                            .unwrap() as usize;
+                            .expect("Error casting char to usize") as usize;
                         scrum_master.set_leader(new_leader);
                         println!(
                             "[{}] Leader is ({}) and last line is {}",

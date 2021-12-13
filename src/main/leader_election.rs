@@ -21,7 +21,7 @@ impl LeaderElection {
     pub fn new(id: usize) -> LeaderElection {
         let ret = LeaderElection {
             id,
-            socket: UdpSocket::bind(id_to_ctrladdr(id)).unwrap(),
+            socket: UdpSocket::bind(id_to_ctrladdr(id)).expect("Unable to bind socket for LeaderElection"),
             leader_id: Arc::new((Mutex::new(Some(TEAM_MEMBERS)), Condvar::new())),
             got_ok: Arc::new((Mutex::new(false), Condvar::new())),
             stop: Arc::new((Mutex::new(false), Condvar::new())),
@@ -40,35 +40,35 @@ impl LeaderElection {
     pub fn get_leader_id(&self) -> usize {
         self.leader_id
             .1
-            .wait_while(self.leader_id.0.lock().unwrap(), |leader_id| {
+            .wait_while(self.leader_id.0.lock().expect("leader_id is poisoned"), |leader_id| {
                 leader_id.is_none()
             })
-            .unwrap()
-            .unwrap()
+            .expect("leader_id is poisoned")
+            .expect("Leader is yet none")
     }
 
     pub fn find_new(&mut self) {
-        if *self.stop.0.lock().unwrap() {
+        if *self.stop.0.lock().expect("Poisoned stop") {
             return;
         }
-        if self.leader_id.0.lock().unwrap().is_none() {
+        if self.leader_id.0.lock().expect("leader_id is poisoned").is_none() {
             return;
         }
         println!("[{}] Searching for new leader", self.id);
-        *self.got_ok.0.lock().unwrap() = false;
-        *self.leader_id.0.lock().unwrap() = None;
+        *self.got_ok.0.lock().expect("got_ok is poisoned") = false;
+        *self.leader_id.0.lock().expect("leader_id is poisoned") = None;
         self.send_election();
         let got_ok =
             self.got_ok
                 .1
-                .wait_timeout_while(self.got_ok.0.lock().unwrap(), TIMEOUT, |got_it| !*got_it);
-        if !*got_ok.unwrap().0 {
+                .wait_timeout_while(self.got_ok.0.lock().expect("got_ok is poisoned"), TIMEOUT, |got_it| !*got_it);
+        if !*got_ok.expect("got_ok is poisoned").0 {
             self.make_me_leader()
         } else {
             let leader_id = self
                 .leader_id
                 .1
-                .wait_while(self.leader_id.0.lock().unwrap(), |leader_id| {
+                .wait_while(self.leader_id.0.lock().expect("leader_id is poisoned"), |leader_id| {
                     leader_id.is_none()
                 });
             match leader_id {
@@ -89,7 +89,7 @@ impl LeaderElection {
     fn send_election(&self) {
         let msg = self.id_to_msg(b'E');
         for peer_id in (self.id + 1)..TEAM_MEMBERS {
-            self.socket.send_to(&msg, id_to_ctrladdr(peer_id)).unwrap();
+            self.socket.send_to(&msg, id_to_ctrladdr(peer_id)).expect("Error sending election to peer");
         }
     }
 
@@ -98,25 +98,25 @@ impl LeaderElection {
         let msg = self.id_to_msg(b'C');
         for peer_id in 0..TEAM_MEMBERS {
             if peer_id != self.id {
-                self.socket.send_to(&msg, id_to_ctrladdr(peer_id)).unwrap();
+                self.socket.send_to(&msg, id_to_ctrladdr(peer_id)).expect("Error sending make_me_leader to peer");
             }
         }
-        *self.leader_id.0.lock().unwrap() = Some(self.id);
+        *self.leader_id.0.lock().expect("Poisoned leader_id") = Some(self.id);
         self.leader_id.1.notify_all();
     }
 
     fn responder(&mut self) {
-        while !*self.stop.0.lock().unwrap() {
+        while !*self.stop.0.lock().expect("Stop is poisoned") {
             let mut buf = [0; size_of::<usize>() + 1];
-            let (_size, _from) = self.socket.recv_from(&mut buf).unwrap();
-            let id_from = usize::from_le_bytes(buf[1..].try_into().unwrap());
-            if *self.stop.0.lock().unwrap() {
+            let (_size, _from) = self.socket.recv_from(&mut buf).expect("responder found an error at recv_from");
+            let id_from = usize::from_le_bytes(buf[1..].try_into().expect("Error getting id_from"));
+            if *self.stop.0.lock().expect("Stop is poisoned") {
                 break;
             }
             match &buf[0] {
                 b'O' => {
                     println!("[{}] Received OK from {}", self.id, id_from);
-                    *self.got_ok.0.lock().unwrap() = true;
+                    *self.got_ok.0.lock().expect("got_ok is poisoned") = true;
                     self.got_ok.1.notify_all();
                 }
                 b'E' => {
@@ -124,14 +124,14 @@ impl LeaderElection {
                     if id_from < self.id {
                         self.socket
                             .send_to(&self.id_to_msg(b'O'), id_to_ctrladdr(id_from))
-                            .unwrap();
+                            .expect("Error sending ok");
                         let mut me = self.clone();
                         thread::spawn(move || me.find_new());
                     }
                 }
                 b'C' => {
                     println!("[{}] Received new coordinator {}", self.id, id_from);
-                    *self.leader_id.0.lock().unwrap() = Some(id_from);
+                    *self.leader_id.0.lock().expect("leader_id is poisoned") = Some(id_from);
                     self.leader_id.1.notify_all();
                 }
                 _ => {
@@ -139,14 +139,14 @@ impl LeaderElection {
                 }
             }
         }
-        *self.stop.0.lock().unwrap() = false;
+        *self.stop.0.lock().expect("stop is poisoned") = false;
         self.stop.1.notify_all();
     }
 
     fn clone(&self) -> LeaderElection {
         LeaderElection {
             id: self.id,
-            socket: self.socket.try_clone().unwrap(),
+            socket: self.socket.try_clone().expect("Error while cloning socket"),
             leader_id: self.leader_id.clone(),
             got_ok: self.got_ok.clone(),
             stop: self.stop.clone(),
@@ -154,6 +154,6 @@ impl LeaderElection {
     }
 
     pub fn set_leader(&mut self, id: usize) {
-        *self.leader_id.0.lock().unwrap() = Some(id);
+        *self.leader_id.0.lock().expect("leader_id is poisoned") = Some(id);
     }
 }
