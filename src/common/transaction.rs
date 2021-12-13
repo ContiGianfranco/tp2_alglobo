@@ -1,3 +1,4 @@
+/// This enum represent all possible states of a transaction
 #[derive(Copy, Clone, PartialEq, Eq, Hash)]
 pub enum TransactionState {
     Accepted,
@@ -7,6 +8,8 @@ pub enum TransactionState {
     Wait,
 }
 
+/// This struct is made to represent a transaction between the leader and a microservice. It's
+/// formed by the transaction_state(TransactionState), transaction_id, amount, and service(as it's id)
 pub struct Transaction {
     pub transaction_state: TransactionState,
     pub transaction_id: i32,
@@ -15,6 +18,7 @@ pub struct Transaction {
 }
 
 impl Transaction {
+    /// Converts the transaction into a bytes array to be send through a socket
     pub fn serialize(&mut self) -> [u8; 13] {
         let mut serialize: [u8; 13] = [0; 13];
 
@@ -39,6 +43,7 @@ impl Transaction {
         serialize
     }
 
+    /// Converts serialized transaction into a transaction again
     pub fn deserialize(buf: [u8; 13]) -> Transaction {
         let state = match buf[0] {
             b'P' => TransactionState::Prepare,

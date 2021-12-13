@@ -6,6 +6,7 @@ use structopt::StructOpt;
 use common::helper::id_to_microservice;
 use rand::Rng;
 
+/// Receives the id of the microservice and return the name of the microservice
 fn id_to_microservice_name(id: usize) -> String {
     let result = match id {
         0 => "Bank",
@@ -26,6 +27,7 @@ struct Cli {
     id: usize,
 }
 
+/// Microservice main
 fn main() {
     // Gets arguments
     let args = Cli::from_args();
@@ -81,7 +83,9 @@ fn main() {
                     service: id as i32,
                 };
 
-                socket.send_to(&response.serialize(), from).expect("Error sending prepare response");
+                socket
+                    .send_to(&response.serialize(), from)
+                    .expect("Error sending prepare response");
             }
             TransactionState::Commit => {
                 println!(
@@ -97,7 +101,9 @@ fn main() {
                     service: id as i32,
                 };
 
-                socket.send_to(&response.serialize(), from).expect("Error sending commit response");
+                socket
+                    .send_to(&response.serialize(), from)
+                    .expect("Error sending commit response");
             }
             TransactionState::Abort => {
                 println!(
@@ -113,7 +119,9 @@ fn main() {
                     service: id as i32,
                 };
 
-                socket.send_to(&response.serialize(), from).expect("Error sending abort response");
+                socket
+                    .send_to(&response.serialize(), from)
+                    .expect("Error sending abort response");
             }
             _ => {
                 println!("[{}] ??? {}", name, transaction.transaction_id);

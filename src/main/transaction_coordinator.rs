@@ -8,10 +8,14 @@ use std::time::Duration;
 
 use crate::payment::Payment;
 
+/// The address of the COORDINATOR_ADDR minus the last digit which will be the id of the alGlobo instance
 const TRANSACTION_COORDINATOR_ADDR: &str = "127.0.0.1:123";
+/// The amount of stakeholders
 const STAKEHOLDERS: usize = 3;
+/// Time before decide that microservice is down
 const TIMEOUT: Duration = Duration::from_secs(5);
 
+/// Struct that represents the transaction logic of the alGlobo leader
 pub struct TransactionCoordinator {
     id: usize,
     log: HashMap<i32, TransactionState>,
@@ -20,11 +24,13 @@ pub struct TransactionCoordinator {
 }
 
 impl TransactionCoordinator {
+    /// Creates a new alGlobo TransactionCoordinator fo the given id.
     pub fn new(id: usize) -> TransactionCoordinator {
         let coordinator = TransactionCoordinator {
             id,
             log: HashMap::new(),
-            socket: UdpSocket::bind(format!("{}{}", TRANSACTION_COORDINATOR_ADDR, id)).expect("Error binding socket for transaction coordinator"),
+            socket: UdpSocket::bind(format!("{}{}", TRANSACTION_COORDINATOR_ADDR, id))
+                .expect("Error binding socket for transaction coordinator"),
             responses: Arc::new((Mutex::new(vec![None; STAKEHOLDERS]), Condvar::new())),
         };
 
@@ -34,6 +40,8 @@ impl TransactionCoordinator {
         coordinator
     }
 
+    /// Receives a transaction id and a payment and communicates with microservices to commit the transaction
+    /// if it's successfully committed return true if it's aborted returns false.
     pub fn submit(&mut self, t: i32, r: Payment) -> bool {
         match self.log.get(&t) {
             None => self.full_protocol(t, r),
@@ -46,6 +54,7 @@ impl TransactionCoordinator {
         }
     }
 
+    /// Is called if the transaction was not preciously logged
     fn full_protocol(&mut self, t: i32, r: Payment) -> bool {
         let clone = r;
         if self.prepare(t, r) {
@@ -55,24 +64,29 @@ impl TransactionCoordinator {
         }
     }
 
+    /// Sends a prepare message and the corresponding transaction info to each  microservice
     fn prepare(&mut self, t: i32, r: Payment) -> bool {
         self.log.insert(t, TransactionState::Wait);
         println!("[COORDINATOR] prepare {}", t);
         self.broadcast_and_wait(b'P', t, r, TransactionState::Commit)
     }
 
+    /// Sends a commit message and the corresponding transaction info to each  microservice
     fn commit(&mut self, t: i32, r: Payment) -> bool {
         self.log.insert(t, TransactionState::Commit);
         println!("[COORDINATOR] commit {}", t);
         self.broadcast_and_wait(b'C', t, r, TransactionState::Commit)
     }
 
+    /// Sends an abort message and the corresponding transaction info to each  microservice
     fn abort(&mut self, t: i32, r: Payment) -> bool {
         self.log.insert(t, TransactionState::Abort);
         println!("[COORDINATOR] abort {}", t);
         !self.broadcast_and_wait(b'A', t, r, TransactionState::Abort)
     }
 
+    /// Broadcasts the specified transaction to all microservices, returns true if every microservice
+    /// responded whit the expected state, it returns false in other cases
     fn broadcast_and_wait(
         &self,
         message: u8,
@@ -146,10 +160,14 @@ impl TransactionCoordinator {
         };
     }
 
+    /// Receives the responses form the microservices and stores it in responses
     fn responder(&mut self) {
         loop {
             let mut buf = [0; 13];
-            let (size, from) = self.socket.recv_from(&mut buf).expect("Error receiving message in responder");
+            let (size, from) = self
+                .socket
+                .recv_from(&mut buf)
+                .expect("Error receiving message in responder");
             println!("[COORDINATOR] received {} bytes from {}", size, from);
 
             let transaction = Transaction::deserialize(buf);
@@ -157,14 +175,14 @@ impl TransactionCoordinator {
             match transaction.transaction_state {
                 TransactionState::Commit => {
                     println!("[COORDINATOR] received COMMIT from {}", transaction.service);
-                    self.responses.0.lock().expect("Responses is poisoned")[transaction.service as usize] =
-                        Some(TransactionState::Commit);
+                    self.responses.0.lock().expect("Responses is poisoned")
+                        [transaction.service as usize] = Some(TransactionState::Commit);
                     self.responses.1.notify_all();
                 }
                 TransactionState::Abort => {
                     println!("[COORDINATOR] received ABORT from {}", transaction.service);
-                    self.responses.0.lock().expect("Responses is poisoned")[transaction.service as usize] =
-                        Some(TransactionState::Abort);
+                    self.responses.0.lock().expect("Responses is poisoned")
+                        [transaction.service as usize] = Some(TransactionState::Abort);
                     self.responses.1.notify_all();
                 }
                 _ => {
@@ -174,6 +192,7 @@ impl TransactionCoordinator {
         }
     }
 
+    /// Clones the TransactionCoordinator
     fn clone(&self) -> Self {
         TransactionCoordinator {
             id: self.id,
