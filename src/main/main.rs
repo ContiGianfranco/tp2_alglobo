@@ -33,7 +33,7 @@ impl LeaderElection {
         let mut ret = LeaderElection {
             id,
             socket: UdpSocket::bind(id_to_ctrladdr(id)).unwrap(),
-            leader_id: Arc::new((Mutex::new(Some(5)), Condvar::new())),
+            leader_id: Arc::new((Mutex::new(Some(TEAM_MEMBERS)), Condvar::new())),
             got_ok: Arc::new((Mutex::new(false), Condvar::new())),
             stop: Arc::new((Mutex::new(false), Condvar::new()))
         };
@@ -146,6 +146,10 @@ impl LeaderElection {
             stop: self.stop.clone(),
         }
     }
+
+    fn set_leader(&mut self, id: usize) {
+        *self.leader_id.0.lock().unwrap() = Some(id);
+    }
 }
 
 /// Receives the id of the new AlGlobo instance.
@@ -214,15 +218,31 @@ fn main() {
                 }
             }
         } else {
-            let leader_id = scrum_master.get_leader_id();
             println!("[{}] Last time I checked last line was {}", id, last_record.to_string());
-            socket.set_read_timeout(Some(TIMEOUT)).unwrap();
-            if let Ok((_size, _from)) = socket.recv_from(&mut buf) {
-                last_record = usize::from_be_bytes(buf);
-                println!("[{}] Received from leader ({}) that last line is {}", id, leader_id, last_record.to_string());
-                thread::sleep(Duration::from_millis(500));
-            } else {
-                scrum_master.find_new()
+
+            let leader_id = scrum_master.get_leader_id();
+            if leader_id != id {
+                if leader_id == TEAM_MEMBERS {
+                    socket.set_read_timeout(Some(TIMEOUT)).unwrap();
+                    if let Ok((_size, from)) = socket.recv_from(&mut buf) {
+                        let new_leader = from.port().to_string().chars().last().unwrap().to_digit(10).unwrap() as usize;
+                        scrum_master.set_leader(new_leader);
+                        last_record = usize::from_be_bytes(buf);
+                        println!("[{}] Leader is ({}) and last line is {}", id, new_leader, last_record.to_string());
+                        thread::sleep(Duration::from_millis(500));
+                    } else {
+                        scrum_master.find_new()
+                    }
+                } else {
+                    socket.set_read_timeout(Some(TIMEOUT)).unwrap();
+                    if let Ok((_size, _from)) = socket.recv_from(&mut buf) {
+                        last_record = usize::from_be_bytes(buf);
+                        println!("[{}] Received from leader ({}) that last line is {}", id, leader_id, last_record.to_string());
+                        thread::sleep(Duration::from_millis(500));
+                    } else {
+                        scrum_master.find_new()
+                    }
+                }
             }
         }
     }

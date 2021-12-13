@@ -7,7 +7,7 @@ use crate::payment::Payment;
 
 const TRANSACTION_COORDINATOR_ADDR: &str = "127.0.0.1:123";
 const STAKEHOLDERS: usize = 3;
-const TIMEOUT: Duration = Duration::from_secs(10);
+const TIMEOUT: Duration = Duration::from_secs(5);
 
 fn id_to_microservice(id: usize) -> String {
     let result = match id {
@@ -185,7 +185,7 @@ impl TransactionCoordinator {
             println!("[COORDINATOR] timeout {}", t);
             false
         } else {
-            responses.unwrap().0.iter().all(|opt| opt.is_some() && (opt.unwrap() == expected))
+            responses.unwrap().0.iter().all(|opt| !opt.is_none() && opt.is_some() && (opt.unwrap() == expected))
         }
     }
 
