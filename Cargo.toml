@@ -16,9 +16,9 @@ name = "microservice"
 path = "src/microservice/main.rs"
 
 [[bin]]
-name = "main_activity"
-path = "src/main_activity/main.rs"
-
-[[bin]]
 name = "main"
 path = "src/main/main.rs"
+
+[lib]
+name = "common"
+path = "src/common/lib.rs"
