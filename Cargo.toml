@@ -19,6 +19,10 @@ path = "src/microservice/main.rs"
 name = "main"
 path = "src/main/main.rs"
 
+[[bin]]
+name = "manual_processing"
+path = "src/manual_processing/main.rs"
+
 [lib]
 name = "common"
 path = "src/common/lib.rs"
