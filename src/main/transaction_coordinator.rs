@@ -4,6 +4,7 @@ use std::sync::{Arc, Condvar, Mutex};
 use std::thread;
 use std::time::Duration;
 use crate::payment::Payment;
+use crate::transaction_coordinator::TransactionState::{Abort, Commit};
 
 const TRANSACTION_COORDINATOR_ADDR: &str = "127.0.0.1:123";
 const STAKEHOLDERS: usize = 3;
@@ -181,12 +182,23 @@ impl TransactionCoordinator {
 
         let responses = self.responses.1.wait_timeout_while(self.responses.0.lock().unwrap(), TIMEOUT, |responses| responses.iter().any(Option::is_none));
 
-        if responses.is_err() {
-            println!("[COORDINATOR] timeout {}", t);
-            false
-        } else {
-            responses.unwrap().0.iter().all(|opt| !opt.is_none() && opt.is_some() && (opt.unwrap() == expected))
-        }
+        return match responses {
+            Ok(wait_result) => {
+                if wait_result.1.timed_out() {
+                    println!("[COORDINATOR] timeout {}", t);
+                    if expected == TransactionState::Abort {
+                        return true;
+                    }
+                    false
+                } else {
+                    wait_result.0.iter().all(|opt| opt.is_some() && (opt.unwrap() == expected))
+                }
+            }
+            Err(e) => {
+                println!("Error at broadcast_and_wait {}", e);
+                false
+            }
+        };
     }
 
     fn responder(&mut self) {

@@ -94,6 +94,7 @@ impl LeaderElection {
             }
         }
         *self.leader_id.0.lock().unwrap() = Some(self.id);
+        self.leader_id.1.notify_all();
     }
 
     fn responder(&mut self) {
@@ -179,6 +180,7 @@ fn main() {
 
 
         if scrum_master.am_i_leader() {
+            println!("Im leader");
             if let Some(result) = iter.next() {
                 if result.is_err() {
                     println!("[Reading record threw error]");
@@ -197,6 +199,8 @@ fn main() {
                     println!("\n\n\n[Record | {},{},{},{}]", record.line,record.hotel, record.airline, record.bank);
 
                     let is_successful = coordinator.submit(record.line as i32, record);
+
+                    println!("result was {}", is_successful);
 
                     if !is_successful {
                         let data = format!("{},{},{}\n",record.hotel, record.airline, record.bank);
@@ -221,6 +225,8 @@ fn main() {
             println!("[{}] Last time I checked last line was {}", id, last_record.to_string());
 
             let leader_id = scrum_master.get_leader_id();
+
+            println!("Im not leader");
             if leader_id != id {
                 if leader_id == TEAM_MEMBERS {
                     socket.set_read_timeout(Some(TIMEOUT)).unwrap();
