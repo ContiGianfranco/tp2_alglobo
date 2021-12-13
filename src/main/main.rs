@@ -99,7 +99,9 @@ fn main() {
             let leader_id = scrum_master.get_leader_id();
 
             if leader_id != id {
-                socket.set_read_timeout(Some(TIMEOUT)).expect("Error setting set_read_timeout in main");
+                socket
+                    .set_read_timeout(Some(TIMEOUT))
+                    .expect("Error setting set_read_timeout in main");
                 if let Ok((_size, from)) = socket.recv_from(&mut buf) {
                     last_record = usize::from_be_bytes(buf);
                     if leader_id == TEAM_MEMBERS {
@@ -110,7 +112,8 @@ fn main() {
                             .last()
                             .expect("Error getting id of leader")
                             .to_digit(10)
-                            .expect("Error casting char to usize") as usize;
+                            .expect("Error casting char to usize")
+                            as usize;
                         scrum_master.set_leader(new_leader);
                         println!(
                             "[{}] Leader is ({}) and last line is {}",
