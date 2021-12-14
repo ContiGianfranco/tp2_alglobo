@@ -2,6 +2,8 @@ use common::payment::Payment;
 use common::transaction_coordinator;
 use std::io;
 
+
+/// Receives transaction amount
 pub fn get_amount(service: &str) -> i32 {
     let mut line = String::new();
     let error_message = "[Main] Expected a number greater than zero.";
@@ -32,6 +34,7 @@ pub fn get_amount(service: &str) -> i32 {
     }
 }
 
+/// Receives transaction id
 pub fn get_last_transaction_id() -> i32 {
     let mut line = String::new();
     let error_message = "[Main] Expected a number greater than zero.";
@@ -62,6 +65,7 @@ pub fn get_last_transaction_id() -> i32 {
     }
 }
 
+/// Manual processing main
 fn main() {
     let mut coordinator = transaction_coordinator::TransactionCoordinator::new(0);
 
