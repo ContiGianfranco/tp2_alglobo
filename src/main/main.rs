@@ -1,18 +1,17 @@
 mod leader_election;
-mod payment;
-mod transaction_coordinator;
 
 use structopt::StructOpt;
 
 use crate::leader_election::{LeaderElection, TEAM_MEMBERS, TIMEOUT};
 use common::helper::id_to_dataaddr;
+use common::transaction_coordinator::TransactionCoordinator;
 use std::fs::File;
 use std::io::Write;
 use std::net::UdpSocket;
 use std::time::Duration;
 use std::{fs, thread};
 
-use crate::payment::Payment;
+use common::payment::Payment;
 
 /// Receives the id of the new AlGlobo instance.
 #[derive(StructOpt)]
@@ -30,7 +29,7 @@ fn main() {
     let socket = UdpSocket::bind(id_to_dataaddr(id)).expect("Unable to bind socket in main");
     let csv = fs::read_to_string("./resources/payments.csv")
         .expect("Something went wrong reading the file");
-    let lines = csv.split("\n").count() - 1;
+    let lines = csv.split('\n').count() - 1;
     let reader = csv::Reader::from_reader(csv.as_bytes());
     let mut iter = reader.into_deserialize();
     let mut scrum_master = LeaderElection::new(id);
@@ -38,8 +37,7 @@ fn main() {
     let mut last_record: usize = 0;
     let mut failed_transactions_file =
         get_failed_transactions_file("src/main/failed_transactions.csv");
-    let mut coordinator = transaction_coordinator::TransactionCoordinator::new(id);
-
+    let mut coordinator = TransactionCoordinator::new(id);
 
     loop {
         if scrum_master.am_i_leader() {
@@ -78,7 +76,7 @@ fn main() {
             } else {
                 println!("[Reached EOF]");
                 scrum_master.stop();
-                break
+                break;
             }
 
             socket
